@@ -51,5 +51,5 @@
                         [(eq? #\{ (peek-char port))
                          (with-handlers ([exn:fail:read? (λ (e) null)])
                            (read-syntax/recursive src port #f base-readtable))
-                         '(void)]))
+                         (make-special-comment #f)]))
                     #\, #\space #f)))
