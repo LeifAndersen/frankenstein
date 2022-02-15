@@ -3,12 +3,42 @@
 (require syntax/parse/define
          racket/format
          (for-syntax racket/base
+                     racket/string
                      racket/syntax
                      syntax/parse))
 
 (provide (rename-out [-app #%app]
-                     [-top #%top])
-         (except-out (all-from-out  racket/base) #%top #%app))
+                     [-top #%top]
+                     [-module-begin #%module-begin])
+         (except-out (all-from-out  racket/base)
+                     #%module-begin
+                     #%top
+                     #%app)
+         ns def)
+
+(begin-for-syntax
+  (define (clj-mod-path->rkt stx)
+    (define str (string-replace (symbol->string (syntax->datum stx)) "." "/"))
+    (format-id stx "~a" str))
+
+  (define-syntax-class req-subclause
+    #:datum-literals (:refer)
+    (pattern [mod:id]
+             #:with sub (clj-mod-path->rkt #'mod))
+
+    (pattern [mod:id :refer [name:id ...]]
+             #:with sub
+             #`(only-in #,(clj-mod-path->rkt #'mod) name ...)))
+
+  (define-syntax-class ns-clause
+    #:datum-literals (:require)
+    (pattern (:require cl:req-subclause ...)
+             #:with req
+             #'(require cl.sub ...))))
+
+(define-syntax-parser ns
+  [(_ name:id cl:ns-clause ...)
+   #'(begin cl.req ...)])
 
 (define-syntax-parser -app
   [(_ x:expr ...)
@@ -29,6 +59,17 @@
         (format-id this-syntax (substring x-str 1)))
       #''new-x]
      [else #'(#%top . x)])])
+
+(define-syntax (-module-begin stx)
+  (syntax-parse stx
+    [(_ x ...)
+     #:with a-d-o (datum->syntax stx '(all-defined-out))
+     #'(#%module-begin
+        (provide a-d-o)
+        x ...)]))
+
+(define-syntax-parser def
+  [(_ x:id e:expr) #'(define x e)])
 
 (module reader syntax/module-reader
   frankenstein
